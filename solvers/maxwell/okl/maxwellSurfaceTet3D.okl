@@ -41,14 +41,13 @@ void upwind(const dfloat nx,
             const dfloat ExP,
             const dfloat EyP,
             const dfloat EzP,
-	    dfloat *HxU,
-            dfloat *HyU,
-            dfloat *HzU,
-	    dfloat *ExU,
-            dfloat *EyU,
-            dfloat *EzU){
+                  dfloat *HxU,
+                  dfloat *HyU,
+                  dfloat *HzU,
+                  dfloat *ExU,
+                  dfloat *EyU,
+                  dfloat *EzU){
 
-    
   *HxU = p_half*( HxP + HxM - ny*(EzP-EzM) + nz*(EyP-EyM) );
   *HyU = p_half*( HyP + HyM - nz*(ExP-ExM) + nx*(EzP-EzM) );
   *HzU = p_half*( HzP + HzM - nx*(EyP-EyM) + ny*(ExP-ExM) );
@@ -66,7 +65,7 @@ void upwind(const dfloat nx,
                                   @restrict const  dlong  *  vmapM,
                                   @restrict const  dlong  *  vmapP,
                                   @restrict const  int    *  EToB,
-                                  const dfloat time,
+                                            const  dfloat    time,
                                   @restrict const  dfloat *  x,
                                   @restrict const  dfloat *  y,
                                   @restrict const  dfloat *  z,
@@ -141,19 +140,21 @@ void upwind(const dfloat nx,
 
             // evaluate "flux" terms: (sJ/J)*(A*nx+B*ny)*(q^* - q^-)
             const dfloat sc = p_half*invJ*sJ;
-	    
+
             dfloat HxU, HyU, HzU;
-	    dfloat ExU, EyU, EzU;
+            dfloat ExU, EyU, EzU;
 
             upwind(nx, ny, nz, HxM, HyM, HzM, ExM, EyM, EzM, HxP, HyP, HzP, ExP, EyP, EzP, &HxU, &HyU, &HzU, &ExU, &EyU, &EzU);
 
-	    dfloat fluxHx = -ny*(EzU-EzM) + nz*(EyU-EyM);
-	    dfloat fluxHy = -nz*(ExU-ExM) + nx*(EzU-EzM);
-	    dfloat fluxHz = -nx*(EyU-EyM) + ny*(ExU-ExM);
-	    dfloat fluxEx =  ny*(HzU-HzM) + nz*(HyU-HyM);
-	    dfloat fluxEy =  nz*(HxU-HxM) + nx*(HzU-HzM);
-	    dfloat fluxEz =  nx*(HyU-HyM) + ny*(HxU-HxM);
-	    
+            dfloat fluxHx = -ny*(EzU-EzM) + nz*(EyU-EyM);
+            dfloat fluxHy = -nz*(ExU-ExM) + nx*(EzU-EzM);
+            dfloat fluxHz = -nx*(EyU-EyM) + ny*(ExU-ExM);
+
+            // NBN: negated the three 2nd terms:
+            dfloat fluxEx =  ny*(HzU-HzM) - nz*(HyU-HyM);
+            dfloat fluxEy =  nz*(HxU-HxM) - nx*(HzU-HzM);
+            dfloat fluxEz =  nx*(HyU-HyM) - ny*(HxU-HxM);
+
             s_fluxHx[es][n] = sc*(fluxHx);
             s_fluxHy[es][n] = sc*(fluxHy);
             s_fluxHz[es][n] = sc*(fluxHz);
@@ -172,19 +173,19 @@ void upwind(const dfloat nx,
           if(n<p_Np){
             // load rhs data from volume fluxes
             dfloat LfluxHx = 0.f, LfluxHy = 0.f, LfluxHz = 0.f;
-	    dfloat LfluxEx = 0.f, LfluxEy = 0.f, LfluxEz = 0.f;
+            dfloat LfluxEx = 0.f, LfluxEy = 0.f, LfluxEz = 0.f;
 
             // rhs += LIFT*((sJ/J)*(A*nx+B*ny)*(q^* - q^-))
             #pragma unroll p_NfacesNfp
-              for(int m=0;m<p_NfacesNfp;++m){
-                const dfloat L = LIFT[n+m*p_Np];
-                LfluxHx += L*s_fluxHx[es][m];
-                LfluxHy += L*s_fluxHy[es][m];
-                LfluxHz += L*s_fluxHz[es][m];
-                LfluxEx += L*s_fluxEx[es][m];
-                LfluxEy += L*s_fluxEy[es][m];
-                LfluxEz += L*s_fluxEz[es][m];
-              }
+            for(int m=0;m<p_NfacesNfp;++m){
+              const dfloat L = LIFT[n+m*p_Np];
+              LfluxHx += L*s_fluxHx[es][m];
+              LfluxHy += L*s_fluxHy[es][m];
+              LfluxHz += L*s_fluxHz[es][m];
+              LfluxEx += L*s_fluxEx[es][m];
+              LfluxEy += L*s_fluxEy[es][m];
+              LfluxEz += L*s_fluxEz[es][m];
+            }
 
             const dlong base = element*p_Np*p_Nfields+n;
             rhsq[base+0*p_Np] += LfluxHx;
@@ -201,25 +202,25 @@ void upwind(const dfloat nx,
 }
 
 
-@kernel void maxwellCfsPmlSurfaceTri2D(const dlong pmlNelements,
-				       @restrict const  dlong  *  pmlElementIds,
-				       @restrict const  dlong  *  pmlIds,
-				       @restrict const  dfloat *  sgeo,
-				       @restrict const  dfloat *  LIFT,
-				       @restrict const  dlong  *  vmapM,
-				       @restrict const  dlong  *  vmapP,
-				       @restrict const  int    *  EToB,
-				       const dfloat time,
-				       @restrict const  dfloat *  x,
-				       @restrict const  dfloat *  y,
-				       @restrict const  dfloat *  z,
-				       @restrict const  dfloat *  q,
-				       @restrict dfloat *  rhsq,
-				       @restrict dfloat *  rhspmlq){
-  
+@kernel void maxwellCfsPmlSurfaceTet3D(const dlong pmlNelements,
+                             @restrict const  dlong  *  pmlElementIds,
+                             @restrict const  dlong  *  pmlIds,
+                             @restrict const  dfloat *  sgeo,
+                             @restrict const  dfloat *  LIFT,
+                             @restrict const  dlong  *  vmapM,
+                             @restrict const  dlong  *  vmapP,
+                             @restrict const  int    *  EToB,
+                                       const  dfloat    time,
+                             @restrict const  dfloat *  x,
+                             @restrict const  dfloat *  y,
+                             @restrict const  dfloat *  z,
+                             @restrict const  dfloat *  q,
+                             @restrict dfloat *  rhsq,
+                             @restrict dfloat *  rhspmlq){
+
   // for all elements
   for(dlong e=0;e<pmlNelements;++e;@outer(0)){
-    
+
     // @shared storage for flux terms
     @shared dfloat s_fluxHx[p_NfacesNfp];
     @shared dfloat s_fluxHy[p_NfacesNfp];	
@@ -227,12 +228,14 @@ void upwind(const dfloat nx,
     @shared dfloat s_fluxEx[p_NfacesNfp];	
     @shared dfloat s_fluxEy[p_NfacesNfp];	
     @shared dfloat s_fluxEz[p_NfacesNfp];
+
     @shared dfloat s_fluxHxy[p_NfacesNfp];
     @shared dfloat s_fluxHxz[p_NfacesNfp];
     @shared dfloat s_fluxHyx[p_NfacesNfp];
     @shared dfloat s_fluxHyz[p_NfacesNfp];
     @shared dfloat s_fluxHzx[p_NfacesNfp];
     @shared dfloat s_fluxHzy[p_NfacesNfp];
+
     @shared dfloat s_fluxExy[p_NfacesNfp];
     @shared dfloat s_fluxExz[p_NfacesNfp];
     @shared dfloat s_fluxEyx[p_NfacesNfp];
@@ -243,157 +246,171 @@ void upwind(const dfloat nx,
     @exclusive dlong  element;
 
     // for all face nodes of all elements
-    for(int n=0;n<p_maxNodes;++n;@inner(0)){ // maxNodes = max(Nfp*Nfaces,Np)
+    for(int n=0;n<p_maxNodes;++n;@inner(0)){  // maxNodes = max(Nfp*Nfaces,Np)
       element = pmlElementIds[e];
-      
+
       if(n<p_NfacesNfp){
-	// find face that owns this node
-	const int face = n/p_Nfp;
-	
-	// load surface geofactors for this face
-	const dlong sid   = p_Nsgeo*(element*p_Nfaces+face);
-	const dfloat nx   = sgeo[sid+p_NXID];
-	const dfloat ny   = sgeo[sid+p_NYID];
-	const dfloat nz   = sgeo[sid+p_NYID];
-	const dfloat sJ   = sgeo[sid+p_SJID];
-	const dfloat invJ = sgeo[sid+p_IJID];
-	
-	// indices of negative and positive traces of face node
-	const dlong id  = element*p_Nfp*p_Nfaces + n;
-	const dlong idM = vmapM[id];
-	const dlong idP = vmapP[id];
-	
-	// load traces
-	const dlong eM = element;
-	const dlong eP = idP/p_Np;
-	const int vidM = idM%p_Np;
-	const int vidP = idP%p_Np;
-	
-	const dlong qbaseM = eM*p_Np*p_Nfields + vidM;
-	const dlong qbaseP = eP*p_Np*p_Nfields + vidP;
-	
-	const dfloat HxM = q[qbaseM + 0*p_Np];
-	const dfloat HyM = q[qbaseM + 1*p_Np];
-	const dfloat HzM = q[qbaseM + 2*p_Np];
-	const dfloat ExM = q[qbaseM + 3*p_Np];
-	const dfloat EyM = q[qbaseM + 4*p_Np];
-	const dfloat EzM = q[qbaseM + 5*p_Np];
-	
-	dfloat HxP = q[qbaseP + 0*p_Np];
-	dfloat HyP = q[qbaseP + 1*p_Np];
-	dfloat HzP = q[qbaseP + 2*p_Np];
-	dfloat ExP = q[qbaseP + 3*p_Np];
-	dfloat EyP = q[qbaseP + 4*p_Np];
-	dfloat EzP = q[qbaseP + 5*p_Np];
+        // find face that owns this node
+        const int face = n/p_Nfp;
 
-	// apply boundary condition
-	const int bc = EToB[face+p_Nfaces*element];
-	if(bc>0){
-	  maxwellDirichletConditions3D(bc, time, x[idM], y[idM], z[idM], nx, ny, nz, HxM, HyM, HzM, ExM, EyM, EzM, &HxP, &HyP, &HzP, &ExP, &EyP, &EzP);
-	  //should also add the Neumann BC here, but need uxM, uyM, vxM, abd vyM somehow
-	}
-	
-            // evaluate "flux" terms: (sJ/J)*(A*nx+B*ny)*(q^* - q^-)
-	const dfloat sc = invJ*sJ;
-	
-	dfloat HxU, HyU, HzU, ExU, EyU, EzU;
-	upwind(nx, ny, nz, HxM, HyM, HzM, ExM, EyM, EzM, HxP, HyP, HzP, ExP, EyP, EzP, &HxU, &HyU, &HzU, &ExU, &EyU, &EzU);
+        // load surface geofactors for this face
+        const dlong sid   = p_Nsgeo*(element*p_Nfaces+face);
+        const dfloat nx   = sgeo[sid+p_NXID];
+        const dfloat ny   = sgeo[sid+p_NYID];
+        const dfloat nz   = sgeo[sid+p_NZID];    // NBN: was p_NYID
+        const dfloat sJ   = sgeo[sid+p_SJID];
+        const dfloat invJ = sgeo[sid+p_IJID];
 
-	const dfloat fluxHx = -ny*(EzU-EzM)+nz*(EyU-EyM);
-	const dfloat fluxHy = -nz*(ExU-ExM)+nx*(EzU-EzM);
-	const dfloat fluxHz = -nx*(EyU-EyM)+ny*(ExU-ExM);
-	const dfloat fluxEx = -ny*(HzU-HzM)+nz*(HyU-HyM);
-	const dfloat fluxEy = -nz*(HxU-HxM)+nx*(HzU-HzM);
-	const dfloat fluxEz = -nx*(HyU-HyM)+ny*(HxU-HxM);
+        // indices of negative and positive traces of face node
+        const dlong id  = element*p_Nfp*p_Nfaces + n;
+        const dlong idM = vmapM[id];
+        const dlong idP = vmapP[id];
 
-	const dfloat fluxHxy = ny*(HxU-HxM);
-	const dfloat fluxHxz = nz*(HxU-HxM);
-	const dfloat fluxHyx = nx*(HyU-HyM);
-	const dfloat fluxHyz = nz*(HyU-HyM);
-	const dfloat fluxHzx = nx*(HzU-HzM);
-	const dfloat fluxHzy = ny*(HzU-HzM);
+        // load traces
+        const dlong eM = element;
+        const dlong eP = idP/p_Np;
+        const int vidM = idM%p_Np;
+        const int vidP = idP%p_Np;
 
-	const dfloat fluxExy = ny*(ExU-ExM);
-	const dfloat fluxExz = nz*(ExU-ExM);
-	const dfloat fluxEyx = nx*(EyU-EyM);
-	const dfloat fluxEyz = nz*(EyU-EyM);
-	const dfloat fluxEzx = nx*(EzU-EzM);
-	const dfloat fluxEzy = ny*(EzU-EzM);
+        const dlong qbaseM = eM*p_Np*p_Nfields + vidM;
+        const dlong qbaseP = eP*p_Np*p_Nfields + vidP;
 
-	s_fluxHx[n] = sc*(fluxHx);
-	s_fluxHy[n] = sc*(fluxHy);
-	s_fluxHz[n] = sc*(fluxHz);
-	s_fluxEx[n] = sc*(fluxEx);
-	s_fluxEy[n] = sc*(fluxEy);
-	s_fluxEz[n] = sc*(fluxEz);
+        const dfloat HxM = q[qbaseM + 0*p_Np];
+        const dfloat HyM = q[qbaseM + 1*p_Np];
+        const dfloat HzM = q[qbaseM + 2*p_Np];
+        const dfloat ExM = q[qbaseM + 3*p_Np];
+        const dfloat EyM = q[qbaseM + 4*p_Np];
+        const dfloat EzM = q[qbaseM + 5*p_Np];
 
-	s_fluxHxy[n] = sc*(fluxHxy);
-	s_fluxHxz[n] = sc*(fluxHxz);
-	s_fluxHyx[n] = sc*(fluxHyx);
-	s_fluxHyz[n] = sc*(fluxHyz);
-	s_fluxHzx[n] = sc*(fluxHzx);
-	s_fluxHzy[n] = sc*(fluxHzy);
+        dfloat HxP = q[qbaseP + 0*p_Np];
+        dfloat HyP = q[qbaseP + 1*p_Np];
+        dfloat HzP = q[qbaseP + 2*p_Np];
+        dfloat ExP = q[qbaseP + 3*p_Np];
+        dfloat EyP = q[qbaseP + 4*p_Np];
+        dfloat EzP = q[qbaseP + 5*p_Np];
 
-	s_fluxExy[n] = sc*(fluxExy);
-	s_fluxExz[n] = sc*(fluxExz);
-	s_fluxEyx[n] = sc*(fluxEyx);
-	s_fluxEyz[n] = sc*(fluxEyz);
-	s_fluxEzx[n] = sc*(fluxEzx);
-	s_fluxEzy[n] = sc*(fluxEzy);
+        // apply boundary condition
+        const int bc = EToB[face+p_Nfaces*element];
+        if(bc>0){
+          maxwellDirichletConditions3D(bc, time, x[idM], y[idM], z[idM], nx, ny, nz, HxM, HyM, HzM, ExM, EyM, EzM, &HxP, &HyP, &HzP, &ExP, &EyP, &EzP);
+          //should also add the Neumann BC here, but need uxM, uyM, vxM, and vyM somehow
+        }
+
+        // evaluate "flux" terms: (sJ/J)*(A*nx+B*ny)*(q^* - q^-)
+        const dfloat sc = invJ*sJ;
+
+        dfloat HxU, HyU, HzU, ExU, EyU, EzU;
+        upwind(nx, ny, nz, HxM, HyM, HzM, ExM, EyM, EzM, HxP, HyP, HzP, ExP, EyP, EzP, &HxU, &HyU, &HzU, &ExU, &EyU, &EzU);
+
+        const dfloat fluxHx = -ny*(EzU-EzM)+nz*(EyU-EyM);
+        const dfloat fluxHy = -nz*(ExU-ExM)+nx*(EzU-EzM);
+        const dfloat fluxHz = -nx*(EyU-EyM)+ny*(ExU-ExM);
+
+        // NBN: negated the three 2nd terms:
+        const dfloat fluxEx =  ny*(HzU-HzM) - nz*(HyU-HyM);
+        const dfloat fluxEy =  nz*(HxU-HxM) - nx*(HzU-HzM);
+        const dfloat fluxEz =  nx*(HyU-HyM) - ny*(HxU-HxM);
+
+        const dfloat fluxHxy = ny*(HxU-HxM);
+        const dfloat fluxHxz = nz*(HxU-HxM);
+        const dfloat fluxHyx = nx*(HyU-HyM);
+        const dfloat fluxHyz = nz*(HyU-HyM);
+        const dfloat fluxHzx = nx*(HzU-HzM);
+        const dfloat fluxHzy = ny*(HzU-HzM);
+
+        const dfloat fluxExy = ny*(ExU-ExM);
+        const dfloat fluxExz = nz*(ExU-ExM);
+        const dfloat fluxEyx = nx*(EyU-EyM);
+        const dfloat fluxEyz = nz*(EyU-EyM);
+        const dfloat fluxEzx = nx*(EzU-EzM);
+        const dfloat fluxEzy = ny*(EzU-EzM);
+
+        s_fluxHx[n] = sc*(fluxHx);
+        s_fluxHy[n] = sc*(fluxHy);
+        s_fluxHz[n] = sc*(fluxHz);
+        s_fluxEx[n] = sc*(fluxEx);
+        s_fluxEy[n] = sc*(fluxEy);
+        s_fluxEz[n] = sc*(fluxEz);
+
+        s_fluxHxy[n] = sc*(fluxHxy);
+        s_fluxHxz[n] = sc*(fluxHxz);
+        s_fluxHyx[n] = sc*(fluxHyx);
+        s_fluxHyz[n] = sc*(fluxHyz);
+        s_fluxHzx[n] = sc*(fluxHzx);
+        s_fluxHzy[n] = sc*(fluxHzy);
+
+        s_fluxExy[n] = sc*(fluxExy);
+        s_fluxExz[n] = sc*(fluxExz);
+        s_fluxEyx[n] = sc*(fluxEyx);
+        s_fluxEyz[n] = sc*(fluxEyz);
+        s_fluxEzx[n] = sc*(fluxEzx);
+        s_fluxEzy[n] = sc*(fluxEzy);
       }
     }
 
     // TW HERE 
-    
+
     // for each node in the element
     for(int n=0;n<p_maxNodes;++n;@inner(0)){
       if(n<p_Np){
-	// load rhs data from volume fluxes
-	dfloat LfluxHx = 0.f, LfluxHy = 0.f, LfluxHz = 0.f;
-	dfloat LfluxEx = 0.f, LfluxEy = 0.f, LfluxEz = 0.f;
-	dfloat LfluxHxy = 0.f, LfluxHxz = 0.f;
-	dfloat LfluxHyx = 0.f, LfluxHyz = 0.f;
-	dfloat LfluxHzx = 0.f, LfluxHzy = 0.f;
-	dfloat LfluxExy = 0.f, LfluxExz = 0.f;
-	dfloat LfluxEyx = 0.f, LfluxEyz = 0.f;
-	dfloat LfluxEzx = 0.f, LfluxEzy = 0.f;
+        // load rhs data from volume fluxes
+        dfloat LfluxHx = 0.f, LfluxHy = 0.f, LfluxHz = 0.f;
+        dfloat LfluxEx = 0.f, LfluxEy = 0.f, LfluxEz = 0.f;
 
-#pragma unroll p_NfacesNfp
-	for(int m=0;m<p_NfacesNfp;++m){
-	  const dfloat L = LIFT[n+m*p_Np];
-	  LfluxHx += L*s_fluxHx[m];
-	  LfluxHy += L*s_fluxHy[m];	      
-	  LfluxHz += L*s_fluxHz[m];
-	  LfluxEx += L*s_fluxEz[m];
-	  LfluxEy += L*s_fluxEz[m];
-	  LfluxEz += L*s_fluxEz[m];
-	  LfluxHxy += L*s_fluxHxy[m];
-	  LfluxHyx += L*s_fluxHyx[m];
-	  LfluxEzx += L*s_fluxEzx[m];
-	  LfluxEzy += L*s_fluxEzy[m];
-	}
+        dfloat LfluxHxy = 0.f, LfluxHxz = 0.f;
+        dfloat LfluxHyx = 0.f, LfluxHyz = 0.f;
+        dfloat LfluxHzx = 0.f, LfluxHzy = 0.f;
 
-	const dlong base = element*p_Np*p_Nfields+n;
-	const dlong basepml = pmlIds[e]*p_Np*p_Npmlfields + n;
-	rhsq[base+0*p_Np] += LfluxHx;
-	rhsq[base+1*p_Np] += LfluxHy;
-	rhsq[base+2*p_Np] += LfluxHz;
-	rhsq[base+3*p_Np] += LfluxEx;
-	rhsq[base+4*p_Np] += LfluxEy;
-	rhsq[base+5*p_Np] += LfluxEz;
-	rhspmlq[basepml+0*p_Np] += LfluxHxy;
-	rhspmlq[basepml+1*p_Np] += LfluxHxz;
-	rhspmlq[basepml+2*p_Np] += LfluxHyx;
-	rhspmlq[basepml+3*p_Np] += LfluxHyz;
-	rhspmlq[basepml+4*p_Np] += LfluxHzx;
-	rhspmlq[basepml+5*p_Np] += LfluxHzy;
-	rhspmlq[basepml+6*p_Np] += LfluxExy;
-	rhspmlq[basepml+7*p_Np] += LfluxExz;
-	rhspmlq[basepml+8*p_Np] += LfluxEyx;
-	rhspmlq[basepml+9*p_Np] += LfluxEyz;
-	rhspmlq[basepml+10*p_Np] += LfluxEzx;
-	rhspmlq[basepml+11*p_Np] += LfluxEzy;
+        dfloat LfluxExy = 0.f, LfluxExz = 0.f;
+        dfloat LfluxEyx = 0.f, LfluxEyz = 0.f;
+        dfloat LfluxEzx = 0.f, LfluxEzy = 0.f;
 
+        #pragma unroll p_NfacesNfp
+        for(int m=0;m<p_NfacesNfp;++m){
+          const dfloat L = LIFT[n+m*p_Np];
+          LfluxHx += L*s_fluxHx[m];
+          LfluxHy += L*s_fluxHy[m];
+          LfluxHz += L*s_fluxHz[m];
+
+          LfluxEx += L*s_fluxEx[m];
+          LfluxEy += L*s_fluxEy[m];
+          LfluxEz += L*s_fluxEz[m];
+
+          // NBN: increment all cross terms
+          LfluxHxy += L*s_fluxHxy[m];   LfluxHxz += L*s_fluxHxz[m];
+          LfluxHyx += L*s_fluxHyx[m];   LfluxHyz += L*s_fluxHyz[m];
+          LfluxHzx += L*s_fluxHzx[m];   LfluxHzy += L*s_fluxHzy[m];
+
+          LfluxExy += L*s_fluxExy[m];   LfluxExz += L*s_fluxExz[m];
+          LfluxEyx += L*s_fluxEyx[m];   LfluxEyz += L*s_fluxEyz[m];
+          LfluxEzx += L*s_fluxEzx[m];   LfluxEzy += L*s_fluxEzy[m];
+        }
+
+        // NBN: does element value (set above) persist?
+        element = pmlElementIds[e];
+        const dlong base = element*p_Np*p_Nfields+n;
+        const dlong basepml = pmlIds[e]*p_Np*p_Npmlfields + n;
+
+        rhsq[base+0*p_Np] += LfluxHx;
+        rhsq[base+1*p_Np] += LfluxHy;
+        rhsq[base+2*p_Np] += LfluxHz;
+        rhsq[base+3*p_Np] += LfluxEx;
+        rhsq[base+4*p_Np] += LfluxEy;
+        rhsq[base+5*p_Np] += LfluxEz;
+
+        rhspmlq[basepml+0*p_Np] += LfluxHxy;
+        rhspmlq[basepml+1*p_Np] += LfluxHxz;
+        rhspmlq[basepml+2*p_Np] += LfluxHyx;
+        rhspmlq[basepml+3*p_Np] += LfluxHyz;
+        rhspmlq[basepml+4*p_Np] += LfluxHzx;
+        rhspmlq[basepml+5*p_Np] += LfluxHzy;
+
+        rhspmlq[basepml+6*p_Np] += LfluxExy;
+        rhspmlq[basepml+7*p_Np] += LfluxExz;
+        rhspmlq[basepml+8*p_Np] += LfluxEyx;
+        rhspmlq[basepml+9*p_Np] += LfluxEyz;
+        rhspmlq[basepml+10*p_Np] += LfluxEzx;
+        rhspmlq[basepml+11*p_Np] += LfluxEzy;
       }
     }
   }
