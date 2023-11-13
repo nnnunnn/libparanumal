@@ -49,10 +49,11 @@
 
 // thread loop over elements
 @kernel void maxwellVolumeTet3D(const dlong Nelements,
-				@restrict const  dfloat *  vgeo,
-				@restrict const  dfloat *  D,
-				@restrict const  dfloat *  q,
-				@restrict dfloat *  rhsq){
+                      @restrict const  dlong* elementIds,
+                      @restrict const  dfloat *  vgeo,
+                      @restrict const  dfloat *  D,
+                      @restrict const  dfloat *  q,
+                      @restrict        dfloat *  rhsq){
 
 
   for(dlong eo=0;eo<Nelements;eo+=(p_Nvol*p_NblockV);@outer(0)){
@@ -64,25 +65,28 @@
     @shared dfloat s_Ey[p_Nvol][p_NblockV][p_Np];
     @shared dfloat s_Ez[p_Nvol][p_NblockV][p_Np];
 
+    @exclusive dlong r_e, element;
+
     for(int et=0;et<p_NblockV;++et;@inner(1)){
       for(int n=0;n<p_Np;++n;@inner(0)){
 
 #pragma unroll p_Nvol
-	for(int es=0;es<p_Nvol;++es){
+        for (int es=0;es<p_Nvol;++es) {
 
-	  const dlong e = es*p_NblockV + et + eo;
+          r_e = es*p_NblockV+et+eo;
 
-	  if(e<Nelements){
+          if (r_e < Nelements) {
+            element = elementIds[r_e];
 
-	    const dlong  qbase = e*p_Np*p_Nfields + n;
-	    s_Hx[es][et][n] = q[qbase+0*p_Np];
-	    s_Hy[es][et][n] = q[qbase+1*p_Np];
-	    s_Hz[es][et][n] = q[qbase+2*p_Np];
-	    s_Ex[es][et][n] = q[qbase+3*p_Np];
-	    s_Ey[es][et][n] = q[qbase+4*p_Np];
-	    s_Ez[es][et][n] = q[qbase+5*p_Np];
-	  }
-	}
+            const dlong  qbase = element*p_Np*p_Nfields+n;
+            s_Hx[es][et][n] = q[qbase + 0*p_Np];
+            s_Hy[es][et][n] = q[qbase + 1*p_Np];
+            s_Hz[es][et][n] = q[qbase + 2*p_Np];
+            s_Ex[es][et][n] = q[qbase + 3*p_Np];
+            s_Ey[es][et][n] = q[qbase + 4*p_Np];
+            s_Ez[es][et][n] = q[qbase + 5*p_Np];
+          }
+        }
       }
     }
 
@@ -97,93 +101,95 @@
         dfloat r_dEydr[p_Nvol] = {0.f}, r_dEyds[p_Nvol] = {0.f}, r_dEydt[p_Nvol] = {0.f};
         dfloat r_dEzdr[p_Nvol] = {0.f}, r_dEzds[p_Nvol] = {0.f}, r_dEzdt[p_Nvol] = {0.f};
 
-	
+
 #pragma unroll p_Np
-	for(int m=0;m<p_Np;++m){
+        for(int m=0;m<p_Np;++m){
 
-	  const dfloat Drnm = D[n+m*p_Np];
-	  const dfloat Dsnm = D[n+m*p_Np+1*p_Np*p_Np];
-	  const dfloat Dtnm = D[n+m*p_Np+2*p_Np*p_Np];
-
-#pragma unroll p_Nvol
-	  for(int es=0;es<p_Nvol;++es){
-	    const dfloat Hxm = s_Hx[es][et][m];
-	    const dfloat Hym = s_Hy[es][et][m];
-	    const dfloat Hzm = s_Hz[es][et][m];
-	    const dfloat Exm = s_Ex[es][et][m];
-	    const dfloat Eym = s_Ey[es][et][m];
-	    const dfloat Ezm = s_Ez[es][et][m];
-
-	    r_dHxdr[es] += Drnm*Hxm;
-	    r_dHxds[es] += Dsnm*Hxm;
-	    r_dHxdt[es] += Dtnm*Hxm;
-	    r_dHydr[es] += Drnm*Hym;
-	    r_dHyds[es] += Dsnm*Hym;
-	    r_dHydt[es] += Dtnm*Hym;
-	    r_dHzdr[es] += Drnm*Hzm;
-	    r_dHzds[es] += Dsnm*Hzm;
-	    r_dHzdt[es] += Dtnm*Hzm;
-
-	    r_dExdr[es] += Drnm*Exm;
-	    r_dExds[es] += Dsnm*Exm;
-	    r_dExdt[es] += Dtnm*Exm;
-	    r_dEydr[es] += Drnm*Eym;
-	    r_dEyds[es] += Dsnm*Eym;
-	    r_dEydt[es] += Dtnm*Eym;
-	    r_dEzdr[es] += Drnm*Ezm;
-	    r_dEzds[es] += Dsnm*Ezm;
-	    r_dEzdt[es] += Dtnm*Ezm;
-	  }
-	}
+          const dfloat Drnm = D[n+m*p_Np];
+          const dfloat Dsnm = D[n+m*p_Np+1*p_Np*p_Np];
+          const dfloat Dtnm = D[n+m*p_Np+2*p_Np*p_Np];
 
 #pragma unroll p_Nvol
-	for(int es=0;es<p_Nvol;++es){
+          for(int es=0;es<p_Nvol;++es){
+            const dfloat Hxm = s_Hx[es][et][m];
+            const dfloat Hym = s_Hy[es][et][m];
+            const dfloat Hzm = s_Hz[es][et][m];
+            const dfloat Exm = s_Ex[es][et][m];
+            const dfloat Eym = s_Ey[es][et][m];
+            const dfloat Ezm = s_Ez[es][et][m];
 
-	  const dlong e = es*p_NblockV + et + eo;
+            r_dHxdr[es] += Drnm*Hxm;
+            r_dHxds[es] += Dsnm*Hxm;
+            r_dHxdt[es] += Dtnm*Hxm;
+            r_dHydr[es] += Drnm*Hym;
+            r_dHyds[es] += Dsnm*Hym;
+            r_dHydt[es] += Dtnm*Hym;
+            r_dHzdr[es] += Drnm*Hzm;
+            r_dHzds[es] += Dsnm*Hzm;
+            r_dHzdt[es] += Dtnm*Hzm;
 
-	  if(e<Nelements){
-	    // prefetch geometric factors (constant on triangle)
-	    const dfloat drdx = vgeo[e*p_Nvgeo + p_RXID];
-	    const dfloat drdy = vgeo[e*p_Nvgeo + p_RYID];
-	    const dfloat drdz = vgeo[e*p_Nvgeo + p_RZID];
-	    const dfloat dsdx = vgeo[e*p_Nvgeo + p_SXID];
-	    const dfloat dsdy = vgeo[e*p_Nvgeo + p_SYID];
-	    const dfloat dsdz = vgeo[e*p_Nvgeo + p_SZID];
-	    const dfloat dtdx = vgeo[e*p_Nvgeo + p_TXID];
-	    const dfloat dtdy = vgeo[e*p_Nvgeo + p_TYID];
-	    const dfloat dtdz = vgeo[e*p_Nvgeo + p_TZID];
+            r_dExdr[es] += Drnm*Exm;
+            r_dExds[es] += Dsnm*Exm;
+            r_dExdt[es] += Dtnm*Exm;
+            r_dEydr[es] += Drnm*Eym;
+            r_dEyds[es] += Dsnm*Eym;
+            r_dEydt[es] += Dtnm*Eym;
+            r_dEzdr[es] += Drnm*Ezm;
+            r_dEzds[es] += Dsnm*Ezm;
+            r_dEzdt[es] += Dtnm*Ezm;
+          }
+        }
 
-	    const dlong base = e*p_Np*p_Nfields + n;
+#pragma unroll p_Nvol
+        for(int es=0;es<p_Nvol;++es){
 
-	    const dfloat dHxdy = drdy*r_dHxdr[es] + dsdy*r_dHxds[es] + dtdy*r_dHxdt[es];
-	    const dfloat dHxdz = drdz*r_dHxdr[es] + dsdz*r_dHxds[es] + dtdz*r_dHxdt[es];
+          r_e = es*p_NblockV + et + eo;
+          if(r_e<Nelements){
+            element = elementIds[r_e];
 
-	    const dfloat dHydx = drdx*r_dHydr[es] + dsdx*r_dHyds[es] + dtdx*r_dHydt[es];
-	    const dfloat dHydz = drdz*r_dHydr[es] + dsdz*r_dHyds[es] + dtdz*r_dHydt[es];
+            // prefetch geometric factors (constant on triangle)
+            const dlong vbase = element * p_Nvgeo;
+            const dfloat drdx = vgeo[vbase + p_RXID];
+            const dfloat drdy = vgeo[vbase + p_RYID];
+            const dfloat drdz = vgeo[vbase + p_RZID];
+            const dfloat dsdx = vgeo[vbase + p_SXID];
+            const dfloat dsdy = vgeo[vbase + p_SYID];
+            const dfloat dsdz = vgeo[vbase + p_SZID];
+            const dfloat dtdx = vgeo[vbase + p_TXID];
+            const dfloat dtdy = vgeo[vbase + p_TYID];
+            const dfloat dtdz = vgeo[vbase + p_TZID];
 
-	    const dfloat dHzdx = drdx*r_dHzdr[es] + dsdx*r_dHzds[es] + dtdx*r_dHzdt[es];
-	    const dfloat dHzdy = drdy*r_dHzdr[es] + dsdy*r_dHzds[es] + dtdy*r_dHzdt[es];
+            const dlong base = element*p_Np*p_Nfields + n;
 
-	    const dfloat dExdy = drdy*r_dExdr[es] + dsdy*r_dExds[es] + dtdy*r_dExdt[es];
-	    const dfloat dExdz = drdz*r_dExdr[es] + dsdz*r_dExds[es] + dtdz*r_dExdt[es];
+            const dfloat dHxdy = drdy*r_dHxdr[es] + dsdy*r_dHxds[es] + dtdy*r_dHxdt[es];
+            const dfloat dHxdz = drdz*r_dHxdr[es] + dsdz*r_dHxds[es] + dtdz*r_dHxdt[es];
 
-	    const dfloat dEydx = drdx*r_dEydr[es] + dsdx*r_dEyds[es] + dtdx*r_dEydt[es];
-	    const dfloat dEydz = drdz*r_dEydr[es] + dsdz*r_dEyds[es] + dtdz*r_dEydt[es];
+            const dfloat dHydx = drdx*r_dHydr[es] + dsdx*r_dHyds[es] + dtdx*r_dHydt[es];
+            const dfloat dHydz = drdz*r_dHydr[es] + dsdz*r_dHyds[es] + dtdz*r_dHydt[es];
 
-	    const dfloat dEzdx = drdx*r_dEzdr[es] + dsdx*r_dEzds[es] + dtdx*r_dEzdt[es];
-	    const dfloat dEzdy = drdy*r_dEzdr[es] + dsdy*r_dEzds[es] + dtdy*r_dEzdt[es];
+            const dfloat dHzdx = drdx*r_dHzdr[es] + dsdx*r_dHzds[es] + dtdx*r_dHzdt[es];
+            const dfloat dHzdy = drdy*r_dHzdr[es] + dsdy*r_dHzds[es] + dtdy*r_dHzdt[es];
 
-	    // dH/dt = -curl E
-	    rhsq[base+0*p_Np] = -(dEzdy-dEydz);
-	    rhsq[base+1*p_Np] = -(dExdz-dEzdx);
-	    rhsq[base+2*p_Np] = -(dEydx-dExdy);
+            const dfloat dExdy = drdy*r_dExdr[es] + dsdy*r_dExds[es] + dtdy*r_dExdt[es];
+            const dfloat dExdz = drdz*r_dExdr[es] + dsdz*r_dExds[es] + dtdz*r_dExdt[es];
 
-	    // dE/dt =  curl H
-	    rhsq[base+3*p_Np] =  (dHzdy-dHydz);
-	    rhsq[base+4*p_Np] =  (dHxdz-dHzdx);
-	    rhsq[base+5*p_Np] =  (dHydx-dHxdy);
-	  }
-	}
+            const dfloat dEydx = drdx*r_dEydr[es] + dsdx*r_dEyds[es] + dtdx*r_dEydt[es];
+            const dfloat dEydz = drdz*r_dEydr[es] + dsdz*r_dEyds[es] + dtdz*r_dEydt[es];
+
+            const dfloat dEzdx = drdx*r_dEzdr[es] + dsdx*r_dEzds[es] + dtdx*r_dEzdt[es];
+            const dfloat dEzdy = drdy*r_dEzdr[es] + dsdy*r_dEzds[es] + dtdy*r_dEzdt[es];
+
+            // dH/dt = -curl E
+            rhsq[base+0*p_Np] = -(dEzdy-dEydz);
+            rhsq[base+1*p_Np] = -(dExdz-dEzdx);
+            rhsq[base+2*p_Np] = -(dEydx-dExdy);
+
+            // dE/dt =  curl H
+            rhsq[base+3*p_Np] =  (dHzdy-dHydz);
+            rhsq[base+4*p_Np] =  (dHxdz-dHzdx);
+            rhsq[base+5*p_Np] =  (dHydx-dHxdy);
+          }
+        }
       }
     }
   }
@@ -194,23 +200,22 @@
 // CFS PML - eps, mu => constant in CFS PML
 // TW this one
 @kernel void maxwellCfsPmlVolumeTet3D(const dlong Nelements,
-				      @restrict const  dlong *  pmlElementIds,
-				      @restrict const  dlong *  pmlIds,
-				      @restrict const  dfloat *  vgeo,
-				      @restrict const  dfloat *  D,
-				      @restrict const  dfloat *  q,
-				      @restrict const  dfloat *  pmlq,
-				      @restrict dfloat *  rhsq,
-				      @restrict dfloat *  rhspmlq){
+                            @restrict const dlong *  pmlElementIds,
+                            @restrict const dlong *  pmlIds,
+                            @restrict const dfloat *  vgeo,
+                            @restrict const dfloat *  D,
+                            @restrict const dfloat *  q,
+                            @restrict const dfloat *  pmlq,
+                            @restrict       dfloat *  rhsq,
+                            @restrict       dfloat *  rhspmlq){
 
   for(dlong e=0;e<Nelements;++e;@outer(0)){
 
     @shared dfloat s_Hx[p_Np], s_Hy[p_Np], s_Hz[p_Np];
     @shared dfloat s_Ex[p_Np], s_Ey[p_Np], s_Ez[p_Np];
 
-
     @exclusive dlong element, pmlElement;
-    
+
     for(int n=0;n<p_Np;++n;@inner(0)){
       // element from all elements
       element = pmlElementIds[e];
@@ -223,7 +228,6 @@
       const dfloat Ex = q[qbase+3*p_Np];
       const dfloat Ey = q[qbase+4*p_Np];
       const dfloat Ez = q[qbase+5*p_Np];
-		  
 
       s_Hx[n] = Hx;
       s_Hy[n] = Hy;
@@ -232,7 +236,6 @@
       s_Ey[n] = Ey;
       s_Ez[n] = Ez;
     }
-
 
     for(int n=0;n<p_Np;++n;@inner(0)){
 
@@ -250,7 +253,7 @@
 
       // dH/dt = -curl E
       // dE/dt =  curl H
-      
+
       dfloat dHxdr = 0, dHxds = 0, dHxdt = 0;
       dfloat dHydr = 0, dHyds = 0, dHydt = 0;
       dfloat dHzdr = 0, dHzds = 0, dHzdt = 0;
@@ -261,20 +264,20 @@
       for(int i=0;i<p_Np;++i){
         const dfloat Drni = D[n+i*p_Np+0*p_Np*p_Np];
         const dfloat Dsni = D[n+i*p_Np+1*p_Np*p_Np];
-	const dfloat Dtni = D[n+i*p_Np+2*p_Np*p_Np];
+        const dfloat Dtni = D[n+i*p_Np+2*p_Np*p_Np];
 
-	const dfloat Hxi = s_Hx[i];
-	const dfloat Hyi = s_Hy[i];
-	const dfloat Hzi = s_Hz[i];
-	const dfloat Exi = s_Ex[i];
-	const dfloat Eyi = s_Ey[i];
-	const dfloat Ezi = s_Ez[i];
-	
-	dHxdr += Drni*Hxi; dHxds += Dsni*Hxi; dHxdt += Dtni*Hxi;
-	dHydr += Drni*Hyi; dHyds += Dsni*Hyi; dHydt += Dtni*Hyi;
-	dHzdr += Drni*Hzi; dHzds += Dsni*Hzi; dHzdt += Dtni*Hzi;
+        const dfloat Hxi = s_Hx[i];
+        const dfloat Hyi = s_Hy[i];
+        const dfloat Hzi = s_Hz[i];
+        const dfloat Exi = s_Ex[i];
+        const dfloat Eyi = s_Ey[i];
+        const dfloat Ezi = s_Ez[i];
+
+        dHxdr += Drni*Hxi; dHxds += Dsni*Hxi; dHxdt += Dtni*Hxi;
+        dHydr += Drni*Hyi; dHyds += Dsni*Hyi; dHydt += Dtni*Hyi;
+        dHzdr += Drni*Hzi; dHzds += Dsni*Hzi; dHzdt += Dtni*Hzi;
       }
-      
+
       const dfloat dHxdy = drdy*dHxdr + dsdy*dHxds + dtdy*dHxdt;
       const dfloat dHxdz = drdz*dHxdr + dsdz*dHxds + dtdz*dHxdt;
       const dfloat dHydx = drdx*dHydr + dsdx*dHyds + dtdx*dHydt;
@@ -288,17 +291,20 @@
       const dfloat dEydz = drdz*dEydr + dsdz*dEyds + dtdz*dEydt;
       const dfloat dEzdx = drdx*dEzdr + dsdx*dEzds + dtdx*dEzdt;
       const dfloat dEzdy = drdy*dEzdr + dsdy*dEzds + dtdy*dEzdt;
-      
-      const dlong base    = element*p_Np*p_Nfields + n;
-      const dlong pmlbase = pmlElement*p_Npmlfields*p_Np + n;
-      
+
+      const dlong    base =    element*p_Np*p_Nfields    + n;
+      const dlong pmlbase = pmlElement*p_Np*p_Npmlfields + n;
+
       // store rhs for state
-      rhsq[base+0*p_Np] = -dEzdy + dEydz;
-      rhsq[base+1*p_Np] = -dExdz + dEzdx;
-      rhsq[base+2*p_Np] = -dEydx + dExdy;
-      rhsq[base+3*p_Np] = -dHzdy + dHydz;
-      rhsq[base+4*p_Np] = -dHxdz + dHzdx;
-      rhsq[base+5*p_Np] = -dHydx + dHxdy;
+      // dH/dt = -curl E
+      rhsq[base+0*p_Np] = -(dEzdy-dEydz);
+      rhsq[base+1*p_Np] = -(dExdz-dEzdx);
+      rhsq[base+2*p_Np] = -(dEydx-dExdy);
+
+      // dE/dt =  curl H
+      rhsq[base+3*p_Np] = (dHzdy-dHydz);
+      rhsq[base+4*p_Np] = (dHxdz-dHzdx);
+      rhsq[base+5*p_Np] = (dHydx-dHxdy);
 
       // store rhs for pmlstate
       rhspmlq[pmlbase+0*p_Np] = dHxdy;
@@ -307,6 +313,7 @@
       rhspmlq[pmlbase+3*p_Np] = dHydz;
       rhspmlq[pmlbase+4*p_Np] = dHzdx;
       rhspmlq[pmlbase+5*p_Np] = dHzdy;
+
       rhspmlq[pmlbase+6*p_Np] = dExdy;
       rhspmlq[pmlbase+7*p_Np] = dExdz;
       rhspmlq[pmlbase+8*p_Np] = dEydx;
