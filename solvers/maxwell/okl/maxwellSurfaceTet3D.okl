@@ -139,7 +139,7 @@ void upwind(const dfloat nx,
             }
 
             // evaluate "flux" terms: (sJ/J)*(A*nx+B*ny)*(q^* - q^-)
-            const dfloat sc = p_half*invJ*sJ;
+            const dfloat sc = invJ*sJ;
 
             dfloat HxU, HyU, HzU;
             dfloat ExU, EyU, EzU;
