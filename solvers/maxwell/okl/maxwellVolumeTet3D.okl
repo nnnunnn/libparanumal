@@ -55,7 +55,6 @@
                       @restrict const  dfloat *  q,
                       @restrict        dfloat *  rhsq){
 
-
   for(dlong eo=0;eo<Nelements;eo+=(p_Nvol*p_NblockV);@outer(0)){
 
     @shared dfloat s_Hx[p_Nvol][p_NblockV][p_Np];
@@ -196,7 +195,6 @@
 }
 
 
-
 // CFS PML - eps, mu => constant in CFS PML
 // TW this one
 @kernel void maxwellCfsPmlVolumeTet3D(const dlong Nelements,
@@ -211,8 +209,12 @@
 
   for(dlong e=0;e<Nelements;++e;@outer(0)){
 
-    @shared dfloat s_Hx[p_Np], s_Hy[p_Np], s_Hz[p_Np];
-    @shared dfloat s_Ex[p_Np], s_Ey[p_Np], s_Ez[p_Np];
+    @shared dfloat s_Hx[p_Np];
+    @shared dfloat s_Hy[p_Np];
+    @shared dfloat s_Hz[p_Np];
+    @shared dfloat s_Ex[p_Np];
+    @shared dfloat s_Ey[p_Np];
+    @shared dfloat s_Ez[p_Np];
 
     @exclusive dlong element, pmlElement;
 
@@ -222,61 +224,56 @@
       // element in pml element
       pmlElement = pmlIds[e];
       const dlong  qbase = element*p_Np*p_Nfields + n;
-      const dfloat Hx = q[qbase+0*p_Np];
-      const dfloat Hy = q[qbase+1*p_Np];
-      const dfloat Hz = q[qbase+2*p_Np];
-      const dfloat Ex = q[qbase+3*p_Np];
-      const dfloat Ey = q[qbase+4*p_Np];
-      const dfloat Ez = q[qbase+5*p_Np];
-
-      s_Hx[n] = Hx;
-      s_Hy[n] = Hy;
-      s_Hz[n] = Hz;
-      s_Ex[n] = Ex;
-      s_Ey[n] = Ey;
-      s_Ez[n] = Ez;
+      s_Hx[n] = q[qbase+0*p_Np];
+      s_Hy[n] = q[qbase+1*p_Np];
+      s_Hz[n] = q[qbase+2*p_Np];
+      s_Ex[n] = q[qbase+3*p_Np];
+      s_Ey[n] = q[qbase+4*p_Np];
+      s_Ez[n] = q[qbase+5*p_Np];
     }
 
     for(int n=0;n<p_Np;++n;@inner(0)){
+      dfloat dHxdr = 0.f, dHxds = 0.f, dHxdt = 0.f;
+      dfloat dHydr = 0.f, dHyds = 0.f, dHydt = 0.f;
+      dfloat dHzdr = 0.f, dHzds = 0.f, dHzdt = 0.f;
 
-      // prefetch geometric factors (constant on triangle)
-      const dlong gbase = element*p_Nvgeo;
-      const dfloat drdx = vgeo[gbase + p_RXID];
-      const dfloat drdy = vgeo[gbase + p_RYID];
-      const dfloat drdz = vgeo[gbase + p_RZID];
-      const dfloat dsdx = vgeo[gbase + p_SXID];
-      const dfloat dsdy = vgeo[gbase + p_SYID];
-      const dfloat dsdz = vgeo[gbase + p_SZID];
-      const dfloat dtdx = vgeo[gbase + p_TXID];
-      const dfloat dtdy = vgeo[gbase + p_TYID];
-      const dfloat dtdz = vgeo[gbase + p_TZID];
+      dfloat dExdr = 0.f, dExds = 0.f, dExdt = 0.f;
+      dfloat dEydr = 0.f, dEyds = 0.f, dEydt = 0.f;
+      dfloat dEzdr = 0.f, dEzds = 0.f, dEzdt = 0.f;
 
-      // dH/dt = -curl E
-      // dE/dt =  curl H
+      #pragma unroll p_Np
+      for(int m=0;m<p_Np;++m){
+        const dfloat Drnm = D[n+m*p_Np+0*p_Np*p_Np];
+        const dfloat Dsnm = D[n+m*p_Np+1*p_Np*p_Np];
+        const dfloat Dtnm = D[n+m*p_Np+2*p_Np*p_Np];
 
-      dfloat dHxdr = 0, dHxds = 0, dHxdt = 0;
-      dfloat dHydr = 0, dHyds = 0, dHydt = 0;
-      dfloat dHzdr = 0, dHzds = 0, dHzdt = 0;
-      dfloat dExdr = 0, dExds = 0, dExdt = 0;
-      dfloat dEydr = 0, dEyds = 0, dEydt = 0;
-      dfloat dEzdr = 0, dEzds = 0, dEzdt = 0;
+        const dfloat Hxm = s_Hx[m];
+        const dfloat Hym = s_Hy[m];
+        const dfloat Hzm = s_Hz[m];
+        const dfloat Exm = s_Ex[m];
+        const dfloat Eym = s_Ey[m];
+        const dfloat Ezm = s_Ez[m];
 
-      for(int i=0;i<p_Np;++i){
-        const dfloat Drni = D[n+i*p_Np+0*p_Np*p_Np];
-        const dfloat Dsni = D[n+i*p_Np+1*p_Np*p_Np];
-        const dfloat Dtni = D[n+i*p_Np+2*p_Np*p_Np];
+        dHxdr += Drnm*Hxm; dHxds += Dsnm*Hxm; dHxdt += Dtnm*Hxm;
+        dHydr += Drnm*Hym; dHyds += Dsnm*Hym; dHydt += Dtnm*Hym;
+        dHzdr += Drnm*Hzm; dHzds += Dsnm*Hzm; dHzdt += Dtnm*Hzm;
 
-        const dfloat Hxi = s_Hx[i];
-        const dfloat Hyi = s_Hy[i];
-        const dfloat Hzi = s_Hz[i];
-        const dfloat Exi = s_Ex[i];
-        const dfloat Eyi = s_Ey[i];
-        const dfloat Ezi = s_Ez[i];
-
-        dHxdr += Drni*Hxi; dHxds += Dsni*Hxi; dHxdt += Dtni*Hxi;
-        dHydr += Drni*Hyi; dHyds += Dsni*Hyi; dHydt += Dtni*Hyi;
-        dHzdr += Drni*Hzi; dHzds += Dsni*Hzi; dHzdt += Dtni*Hzi;
+        dExdr += Drnm*Exm; dExds += Dsnm*Exm; dExdt += Dtnm*Exm;
+        dEydr += Drnm*Eym; dEyds += Dsnm*Eym; dEydt += Dtnm*Eym;
+        dEzdr += Drnm*Ezm; dEzds += Dsnm*Ezm; dEzdt += Dtnm*Ezm;
       }
+
+      // geometric factors (constant on triangle)
+      const dlong vbase = element*p_Nvgeo;
+      const dfloat drdx = vgeo[vbase + p_RXID];
+      const dfloat drdy = vgeo[vbase + p_RYID];
+      const dfloat drdz = vgeo[vbase + p_RZID];
+      const dfloat dsdx = vgeo[vbase + p_SXID];
+      const dfloat dsdy = vgeo[vbase + p_SYID];
+      const dfloat dsdz = vgeo[vbase + p_SZID];
+      const dfloat dtdx = vgeo[vbase + p_TXID];
+      const dfloat dtdy = vgeo[vbase + p_TYID];
+      const dfloat dtdz = vgeo[vbase + p_TZID];
 
       const dfloat dHxdy = drdy*dHxdr + dsdy*dHxds + dtdy*dHxdt;
       const dfloat dHxdz = drdz*dHxdr + dsdz*dHxds + dtdz*dHxdt;
@@ -291,6 +288,10 @@
       const dfloat dEydz = drdz*dEydr + dsdz*dEyds + dtdz*dEydt;
       const dfloat dEzdx = drdx*dEzdr + dsdx*dEzds + dtdx*dEzdt;
       const dfloat dEzdy = drdy*dEzdr + dsdy*dEzds + dtdy*dEzdt;
+
+      // NBN: does initialization in top loop persist?
+      element = pmlElementIds[e];   // element from all elements
+      pmlElement = pmlIds[e];       // element in pml elements
 
       const dlong    base =    element*p_Np*p_Nfields    + n;
       const dlong pmlbase = pmlElement*p_Np*p_Npmlfields + n;
