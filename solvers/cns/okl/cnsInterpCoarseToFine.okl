@@ -1,0 +1,71 @@
+/*
+
+The MIT License (MIT)
+
+Copyright (c) 2017-2024 Tim Warburton, Noel Chalmers, Jesse Chan, Ali Karakus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+
+@kernel void cnsInterpCoarseToFine(const dlong Nelements,
+                         @restrict const dfloat* qInterp,
+                         @restrict const dfloat* qCoarse,
+                         @restrict       dfloat* qFine) {
+
+  for (dlong e=0;e<Nelements;++e;@outer(0)) {
+
+    // cache field values for each qCoarse node in element e
+    @shared dfloat s_qCoarse[p_Nfields][p_NpCoarse];
+
+    // thread n stores Nfield values for node n
+    for(int n=0;n<p_NpFine;++n;@inner(0)) {
+
+      // only load data for NpCoarse nodes
+      if(n<p_NpCoarse) {
+
+        // offset into element e of qCoarse for thread n
+        const dlong qC_base = (e*p_NpCoarse*p_Nfields) + n;
+        #pragma unroll p_Nfields
+        for (int j=0; j<p_Nfields; ++j)
+          s_qCoarse[j][n] = qCoarse[qC_base + j*p_NpCoarse];
+      }
+    }
+
+    // interpolate field data from qCoarse to qFine
+    for (int n=0;n<p_NpFine;++n;@inner(0)) {
+      
+      // accumulators for Nfield qFine values for node n in element e
+      dfloat qTmp[p_Nfields] = {0.0f};
+      
+      for (int i=0;i<p_NpCoarse;++i) {
+        const dfloat interp = qInterp[i + n*p_NpCoarse];
+        #pragma unroll p_Nfields
+        for (int j=0; j<p_Nfields; ++j) 
+          qTmp[j] += interp * s_qCoarse[j][i];
+      }
+
+      // offset into element e of qFine for thread n
+      const dlong qF_base = (e*p_NpFine*p_Nfields) + n;
+      #pragma unroll p_Nfields
+      for (int j=0; j<p_Nfields; ++j)
+        qFine[qF_base + j*p_NpFine] = qTmp[j];
+    }
+  }
+}

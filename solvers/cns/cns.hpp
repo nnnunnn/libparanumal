@@ -102,6 +102,17 @@ public:
   void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs, const dfloat time);
 
   dfloat MaxWaveSpeed(deviceMemory<dfloat>& o_Q, const dfloat T);
+
+  // See file: cnsCheckpoint.cpp
+  // NBN: restarting a simulation
+  void saveCheckpoint(const memory<dfloat>& outQ, dfloat time, int tstep);
+  void loadCheckpoint(dfloat& time);
+
+  // NBN: enable changing of order on restarts
+  kernel_t coarseToFineKernel;
+  kernel_t fineToCoarseKernel;
+  void changeOrder(int N_old, int Np_old, int N_new, int Np_new);
+
 };
 
 #endif
