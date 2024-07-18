@@ -705,6 +705,18 @@ void mesh_t::DegreeRaiseMatrixTri2D(const int Nc, const int Nf,
   InterpolationMatrixTri2D(Nc, rc, sc, rf, sf, P);
 }
 
+// NBN: fineToCoarseKernel (for loading restart checkpoints)
+void mesh_t::DegreeLowerMatrixTri2D(const int Nf, const int Nc,
+                                    memory<dfloat>& P){
+  memory<dfloat> rc, sc;
+  memory<dfloat> rf, sf;
+  NodesTri2D(Nc, rc, sc);
+  NodesTri2D(Nf, rf, sf);
+
+  InterpolationMatrixTri2D(Nf, rf,sf, rc,sc, P);  // fineToCoarse
+//InterpolationMatrixTri2D(Nc, rc,sc, rf,sf, P);  // coarseToFine
+}
+
 void mesh_t::CubaturePmatrixTri2D(const int _N,
                                   const memory<dfloat> _r,
                                   const memory<dfloat> _s,

@@ -859,6 +859,11 @@ class mesh_t {
                                        memory<dfloat>& I);
   static void DegreeRaiseMatrixTri2D(const int Nc, const int Nf,
                                      memory<dfloat>& P);
+
+  // NBN: fineToCoarseKernel (for loading restart checkpoints)
+  static void DegreeLowerMatrixTri2D(const int Nf, const int Nc,
+                                     memory<dfloat>& P);
+
   static void CubatureNodesTri2D(const int cubTriN,
                                  int& _cubNp,
                                  memory<dfloat>& cubTrir,
@@ -1039,6 +1044,11 @@ class mesh_t {
                                        memory<dfloat>& I);
   static void DegreeRaiseMatrixTet3D(const int Nc, const int Nf,
                                      memory<dfloat>& P);
+
+  // NBN: fineToCoarseKernel (for loading restart checkpoints)
+  static void DegreeLowerMatrixTet3D(const int Nf, const int Nc,
+                                     memory<dfloat>& P);
+
   static void CubatureNodesTet3D(const int cubTetN,
                                  int& _cubNp,
                                  memory<dfloat>& _cubr,

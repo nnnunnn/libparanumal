@@ -663,6 +663,18 @@ void mesh_t::DegreeRaiseMatrixTet3D(const int Nc, const int Nf,
   InterpolationMatrixTet3D(Nc, rc, sc, tc, rf, sf, tf, P);
 }
 
+// NBN: fineToCoarseKernel (for loading restart checkpoints)
+void mesh_t::DegreeLowerMatrixTet3D(const int Nf, const int Nc,
+                                    memory<dfloat>& P){
+  memory<dfloat> rc, sc, tc;
+  memory<dfloat> rf, sf, tf;
+  NodesTet3D(Nc, rc, sc, tc);
+  NodesTet3D(Nf, rf, sf, tf);
+
+  InterpolationMatrixTet3D(Nf, rf,sf,tf, rc,sc,tc, P);  // fineToCoarse
+//InterpolationMatrixTet3D(Nc, rc,sc,tc, rf,sf,tf, P);  // coarseToFine
+}
+
 void mesh_t::CubaturePmatrixTet3D(const int _N,
                                   const memory<dfloat> _r,
                                   const memory<dfloat> _s,
