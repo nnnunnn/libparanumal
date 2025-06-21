@@ -24,6 +24,7 @@ SOFTWARE.
 
 */
 
+#include "ins.hpp"
 #include "stress.hpp"
 #include "timer.hpp"
 #include <limits>
@@ -324,7 +325,7 @@ int stress_t::Solve(linearSolver_t<dfloat>& linearSolver,
 
   // if there is a nullspace, remove the constant vector from r
   if(allNeumann) ZeroMean(o_r);
-  
+
   int Niter = linearSolver.Solve(*this, precon, o_x, o_r, tol, MAXIT, verbose);
 
   return Niter;
@@ -372,16 +373,16 @@ void stress_t::BuildOperatorDiagonal(deviceMemory<pfloat> &o_invDiagA ){
     allNeumannScale*allNeumannScale: 0;
 
   buildOperatorDiagonalKernel(mesh.Nelements,
-				     o_nut,
-				     mesh.o_mapB,
-				     neumannBoost,
-				     mesh.o_wJ,
-				     mesh.o_vgeo,
-				     mesh.o_D,
-				     mesh.o_S,
-				     mesh.o_MM,
-				     lambda,
-				     o_diagAL);
+			      o_nut,
+			      mesh.o_mapB,
+			      neumannBoost,
+			      mesh.o_wJ,
+			      mesh.o_vgeo,
+			      mesh.o_D,
+			      mesh.o_S,
+			      mesh.o_MM,
+			      lambda,
+			      o_diagAL);
   
   ogsMasked.Gather(o_diagA, o_diagAL, Nfields, ogs::Add, ogs::Trans);
 
@@ -398,6 +399,8 @@ void stress_t::BuildOperatorDiagonalContinuousTri2D(memory<dfloat>& A) {
 
 void stress_t::BuildOperatorDiagonalContinuousQuad2D(memory<dfloat>& A) {
 
+  // TW: does not get used
+  exit(-1);
   /*
     \sum_j d_j ( nu (d_j u_i + d_i u_j ))
     => -\sum_j (d_j phi, nu (d_j u_i + d_i u_j ))
@@ -515,16 +518,19 @@ void stress_t::BuildOperatorDiagonalContinuousHex3D(memory<dfloat>& A) {
 
 
 void stress_t::Setup(platform_t& _platform, mesh_t& _mesh,
-		     settings_t& _settings, dfloat viscosity, dfloat _lambda,
+		     insSettings_t& _insSettings, dfloat viscosity, dfloat _lambda,
                        const int _NBCTypes, const memory<int> _BCType){
 
   platform = _platform;
   mesh = _mesh;
   comm = _mesh.comm;
-  settings = _settings;
+  //  settings = _settings;
   lambda = _lambda;
 
-  Nfields = mesh.dim;
+  settings = _insSettings.extractVelocitySettings();
+  stressSettings = _insSettings;
+  
+  Nfields = mesh.dim+2; // velocity + k + tau
 
   //Trigger JIT kernel builds
   ogs::InitializeKernels(platform, ogs::Dfloat, ogs::Add);
@@ -532,10 +538,10 @@ void stress_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   //setup linear algebra module
   platform.linAlg().InitKernels({"add", "sum", "scale",
-        "axpy", "zaxpy",
-        "amx", "amxpy", "zamxpy",
-        "adx", "adxpy", "zadxpy",
-        "innerProd", "norm2", "d2p", "p2d"});
+      "axpy", "zaxpy",
+      "amx", "amxpy", "zamxpy",
+      "adx", "adxpy", "zadxpy",
+      "innerProd", "norm2", "d2p", "p2d"});
 
   /*setup trace halo exchange */
   traceHalo = mesh.HaloTraceSetup(Nfields);
@@ -570,8 +576,24 @@ void stress_t::Setup(platform_t& _platform, mesh_t& _mesh,
   int blockMax = 256;
   if (platform.device.mode() == "CUDA") blockMax = 512;
 
-  kernelInfo["defines/" "p_Nfields"]= Nfields;
   
+  kernelInfo["defines/" "p_Nfields"]= Nfields;
+
+  dfloat SIGMAK, SIGMATAU, ALPHA, BETA, BETASTAR;
+
+  stressSettings.getSetting("K-TAU ALPHA",    ALPHA);
+  stressSettings.getSetting("K-TAU BETA",     BETA);
+  stressSettings.getSetting("K-TAU BETASTAR", BETASTAR);
+  stressSettings.getSetting("K-TAU SIGMAK",   SIGMAK);
+  stressSettings.getSetting("K-TAU SIGMATAU", SIGMATAU);
+
+  kernelInfo["defines/" "p_invNu"] = (dfloat)(1./viscosity);
+  kernelInfo["defines/" "p_ALPHA"] = (dfloat)(ALPHA);
+  kernelInfo["defines/" "p_BETA"] = (dfloat)(BETA);
+  kernelInfo["defines/" "p_BETASTAR"] = (dfloat)(BETASTAR);
+  kernelInfo["defines/" "p_invSigmaK"] = (dfloat)(1./SIGMAK);
+  kernelInfo["defines/" "p_invSigmaTau"] = (dfloat)(1./SIGMATAU);
+
   int NblockV = std::max(1,blockMax/mesh.Np);
   kernelInfo["defines/" "p_NblockV"]= NblockV;
 
@@ -602,7 +624,7 @@ void stress_t::Setup(platform_t& _platform, mesh_t& _mesh,
       dlong id = e*mesh.Np + n;
       dfloat xn = mesh.x[id];
       dfloat yn = mesh.y[id];
-      nut[id] = 1 + 0.5*(1+tanh(40.*(xn-1.2)))*(0.01/viscosity);  // 1 + excess scaled by 1/viscosity
+      nut[id] = 0; // viscosity; //  + 0.5*(1+tanh(40.*(xn-1.2)))*(0.01/viscosity);  // 1 + excess scaled by 1/viscosity
     }
   }
   o_nut  = platform.malloc<dfloat>(mesh.Np*mesh.Nelements, nut);
