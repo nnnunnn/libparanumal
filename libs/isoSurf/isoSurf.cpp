@@ -28,7 +28,7 @@ SOFTWARE.
 #include "isoSurf.hpp"
 
 // use to locate occa kernel (isoSurface3D.okl)
-#define ISO_DIR LIBP_DIR"/libs/plot/"
+#define ISO_DIR LIBP_DIR"/libs/isoSurf/"
 
 // using namespace libp;
 namespace libp {
@@ -143,8 +143,10 @@ void isoSurf_t::Setup(platform_t& _platform,
   nnMSG(5, "[proc:%02d] isoSurfaceKernel() ready. Nlevels = %d\n", m_rank, isoNlevels);
 }
 
-
-// Version 1 (bns, cns): {rho, (u,v,w), p} + vorticity
+//---------------------------------------------------------
+// Version 1 (bns, cns): {rho, (u,v,w), p} + {Q,|v|}
+// Version 2 (ins     ): {     (u,v,w)   } + {Q,|v|,0}
+//---------------------------------------------------------
 void isoSurf_t::doPlot(const mesh_t& mesh,
   const deviceMemory<dfloat>& o_q,
   const deviceMemory<dfloat>& o_Extra,

@@ -116,6 +116,23 @@ class mesh_t {
   memory<int>   mapB;      // node-to-boundary condition type
   deviceMemory<int> o_mapB;
 
+  //-------------------------------------------------------
+  // NBN: extract node maps for each bdry type
+  memory<hlong>   mapWall;        hlong Nwall;      // 1
+  memory<hlong>   mapInflow;      hlong Ninflow;    // 2
+  memory<hlong>   mapOutflow;     hlong Noutflow;   // 3
+  memory<hlong>   mapSlip;        hlong Nslip;      // 4
+  memory<hlong>   mapFar;         hlong Nfar;       // 5
+  memory<hlong>   mapPec;         hlong Npec;       // 6
+  memory<hlong>   mapSym;         hlong Nsym;       // 7
+  memory<hlong>   map_BC_Plot;  // concat selected bdry faces for plotting
+
+  // NBN: preparing for plotting boundary faces
+  void BuildBCMaps();
+  void DumpBdryNodes();
+  void PlotBoundary(memory<dfloat> Q, const std::string& fname);
+  //-------------------------------------------------------
+
   memory<hlong> elementInfo; //type of element
 
   memory<dlong> VmapM;  // list of vertices on each face
@@ -222,6 +239,31 @@ class mesh_t {
   memory<int>   plotEToV;             // triangulation of plot nodes
   memory<dfloat> plotR, plotS, plotT; // coordinates of plot nodes in reference element
   memory<dfloat> plotInterp;          // reference to plot node interpolation matrix
+
+
+  /*************************/
+  /* Clip region to plot   */   // NBN:
+  /*************************/
+  bool  InClipBox(dlong e, dfloat clip_tol = 1e-5);
+  hlong GetClipElements(memory<dlong>& eflags, dfloat clip_tol = 1e-5);
+  void  GetClipBox();
+  void  GetBoundingBox();
+  void  SetupPlotData();
+  void  PrintClipBox();
+
+  hlong     K_local,     K_total,     K_off;  // plotting entire domain
+  hlong clipK_local, clipK_total, clipK_off;  // plotting clipped region
+  bool  plotClipRegion;     // flag if plotting a clipped region of mesh
+
+  bool  m_is3D;
+
+  dfloat  m_boundingBox[2][3];
+  dfloat  m_plotRegion[2][3];
+//dfloat  m_clipBox[2][3];
+
+  memory<dlong>       m_clipElems;
+  deviceMemory<dlong> o_clipElems;
+
 
   /*************************/
   /* Physical Space        */
